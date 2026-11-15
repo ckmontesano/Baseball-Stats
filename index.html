@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLB Player Stats</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #f0f2f5;
+    --border: #dde1e6;
+    --text: #15191e;
+    --muted: #5f6b7a;
+    --accent: #0b5ed7;
+    --accent-soft: #e5efff;
+    --danger: #b42318;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.06);
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216;
+      --surface: #171b21;
+      --surface-2: #1f242c;
+      --border: #2c333d;
+      --text: #e8ebef;
+      --muted: #96a1af;
+      --accent: #5b9cff;
+      --accent-soft: #1b2a44;
+      --danger: #ff7b72;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { margin: 0 0 4px; font-size: 1.75rem; letter-spacing: -.01em; }
+  header p { margin: 0 0 20px; color: var(--muted); }
+
+  /* Search */
+  .search { position: relative; }
+  .search input {
+    width: 100%;
+    padding: 14px 16px;
+    font: inherit;
+    font-size: 1.05rem;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    outline: none;
+  }
+  .search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .results {
+    position: absolute; z-index: 10; left: 0; right: 0; top: calc(100% + 6px);
+    margin: 0; padding: 6px; list-style: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    max-height: 380px; overflow-y: auto;
+  }
+  .results[hidden] { display: none; }
+  .results li {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  }
+  .results li[aria-selected="true"], .results li:hover { background: var(--accent-soft); }
+  .results img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: var(--surface-2); flex: none; }
+  .results .name { font-weight: 600; }
+  .results .meta { color: var(--muted); font-size: .85rem; }
+  .results .empty { color: var(--muted); cursor: default; }
+  .results .empty:hover { background: none; }
+
+  /* Status */
+  .status { margin-top: 28px; color: var(--muted); text-align: center; }
+  .status.error { color: var(--danger); }
+
+  /* Player card */
+  .player { margin-top: 28px; }
+  .bio {
+    display: flex; gap: 20px; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 20px;
+  }
+  .bio img { width: 120px; height: 120px; border-radius: 12px; object-fit: cover; background: var(--surface-2); flex: none; }
+  .bio h2 { margin: 0; font-size: 1.6rem; line-height: 1.2; }
+  .bio .sub { color: var(--muted); margin: 4px 0 12px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: .9rem; }
+  .facts div { display: flex; gap: 6px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; font-weight: 500; }
+  .badge {
+    display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); vertical-align: middle; margin-left: 8px;
+  }
+
+  .tabs { display: flex; gap: 6px; margin: 24px 0 12px; }
+  .tabs button {
+    font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; box-shadow: var(--shadow);
+  }
+  .tile .label { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  .tile .value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .section-title { font-size: .95rem; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+
+  .table-wrap {
+    overflow-x: auto; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  thead th {
+    position: sticky; top: 0; background: var(--surface-2); font-weight: 600; color: var(--muted);
+    cursor: pointer; user-select: none;
+  }
+  thead th:hover { color: var(--text); }
+  thead th.sorted::after { content: " ▾"; }
+  thead th.sorted.asc::after { content: " ▴"; }
+  tbody tr:hover { background: var(--surface-2); }
+  tr.subtotal td { color: var(--muted); font-style: italic; }
+  tfoot td { font-weight: 700; background: var(--surface-2); border-bottom: 0; }
+
+  footer { margin-top: 40px; color: var(--muted); font-size: .8rem; text-align: center; }
+  footer a { color: inherit; }
+
+  @media (max-width: 600px) {
+    .bio { flex-direction: column; text-align: center; }
+    .facts { justify-content: center; }
+    .bio img { width: 96px; height: 96px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MLB Player Stats</h1>
+    <p>Search any current or former major leaguer to see their year-by-year and career numbers.</p>
+  </header>
+
+  <div class="search">
+    <input id="q" type="search" placeholder="Search players, e.g. Aaron Judge" autocomplete="off"
+           role="combobox" aria-expanded="false" aria-controls="results" aria-autocomplete="list">
+    <ul id="results" class="results" role="listbox" hidden></ul>
+  </div>
+
+  <div id="status" class="status" role="status"></div>
+  <section id="player" class="player" hidden></section>
+
+  <footer>
+    Data from the <a href="https://statsapi.mlb.com" target="_blank" rel="noopener">MLB Stats API</a>.
+    Not affiliated with Major League Baseball.
+  </footer>
+</div>
+
+<script>
+(() => {
+  const API = 'https://statsapi.mlb.com/api/v1';
+  const headshot = (id, w = 120) =>
+    `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_${w},q_auto:best/v1/people/${id}/headshot/67/current`;
+
+  // Column definitions: [stat key, header label, type]
+  const COLUMNS = {
+    hitting: [
+      ['gamesPlayed', 'G'], ['plateAppearances', 'PA'], ['atBats', 'AB'], ['runs', 'R'], ['hits', 'H'],
+      ['doubles', '2B'], ['triples', '3B'], ['homeRuns', 'HR'], ['rbi', 'RBI'], ['stolenBases', 'SB'],
+      ['baseOnBalls', 'BB'], ['strikeOuts', 'SO'], ['avg', 'AVG'], ['obp', 'OBP'], ['slg', 'SLG'], ['ops', 'OPS'],
+    ],
+    pitching: [
+      ['wins', 'W'], ['losses', 'L'], ['era', 'ERA'], ['gamesPlayed', 'G'], ['gamesStarted', 'GS'],
+      ['saves', 'SV'], ['inningsPitched', 'IP'], ['hits', 'H'], ['earnedRuns', 'ER'], ['homeRuns', 'HR'],
+      ['baseOnBalls', 'BB'], ['strikeOuts', 'SO'], ['whip', 'WHIP'], ['strikeoutsPer9Inn', 'K/9'],
+    ],
+  };
+  const TILES = {
+    hitting: [['avg', 'AVG'], ['homeRuns', 'HR'], ['rbi', 'RBI'], ['ops', 'OPS'], ['hits', 'H'], ['stolenBases', 'SB']],
+    pitching: [['era', 'ERA'], ['wins', 'W'], ['strikeOuts', 'SO'], ['whip', 'WHIP'], ['inningsPitched', 'IP'], ['saves', 'SV']],
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const input = $('q'), list = $('results'), statusEl = $('status'), playerEl = $('player');
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  async function getJSON(url, signal) {
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    return res.json();
+  }
+
+  // Team id -> abbreviation, loaded once for the search dropdown.
+  let teamsById = {};
+  getJSON(`${API}/teams?sportId=1`).then((d) => {
+    for (const t of d.teams || []) teamsById[t.id] = t;
+  }).catch(() => {});
+
+  // ---------- Search ----------
+  let searchTimer, searchCtrl, items = [], active = -1;
+
+  input.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const q = input.value.trim();
+    if (q.length < 2) return closeList();
+    searchTimer = setTimeout(() => search(q), 250);
+  });
+
+  async function search(q) {
+    searchCtrl?.abort();
+    searchCtrl = new AbortController();
+    try {
+      const d = await getJSON(`${API}/people/search?names=${encodeURIComponent(q)}&sportIds=1`, searchCtrl.signal);
+      items = (d.people || [])
+        .sort((a, b) => (b.active === true) - (a.active === true) || (b.lastPlayedDate || '').localeCompare(a.lastPlayedDate || ''))
+        .slice(0, 12);
+      renderList();
+    } catch (e) {
+      if (e.name !== 'AbortError') { items = []; renderList('Search failed. Try again.'); }
+    }
+  }
+
+  function playerMeta(p) {
+    const pos = p.primaryPosition?.abbreviation || '';
+    const team = p.currentTeam && teamsById[p.currentTeam.id];
+    if (p.active && team) return [pos, team.abbreviation || team.name].filter(Boolean).join(' · ');
+    const first = p.mlbDebutDate?.slice(0, 4), last = p.lastPlayedDate?.slice(0, 4);
+    const years = first ? (last && last !== first ? `${first}–${last}` : first) : '';
+    return [pos, years].filter(Boolean).join(' · ');
+  }
+
+  function renderList(emptyMsg) {
+    active = -1;
+    if (!items.length) {
+      list.innerHTML = `<li class="empty">${esc(emptyMsg || 'No players found.')}</li>`;
+    } else {
+      list.innerHTML = items.map((p, i) => `
+        <li role="option" id="opt-${i}" data-i="${i}" aria-selected="false">
+          <img src="${headshot(p.id, 72)}" alt="" loading="lazy">
+          <div><div class="name">${esc(p.fullName)}</div><div class="meta">${esc(playerMeta(p))}</div></div>
+        </li>`).join('');
+    }
+    list.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeList() {
+    list.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  }
+
+  function setActive(i) {
+    const opts = list.querySelectorAll('[role="option"]');
+    if (!opts.length) return;
+    active = (i + opts.length) % opts.length;
+    opts.forEach((o, j) => o.setAttribute('aria-selected', j === active));
+    opts[active].scrollIntoView({ block: 'nearest' });
+    input.setAttribute('aria-activedescendant', opts[active].id);
+  }
+
+  input.addEventListener('keydown', (e) => {
+    if (list.hidden) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); choose(active >= 0 ? active : 0); }
+    else if (e.key === 'Escape') closeList();
+  });
+  list.addEventListener('mousedown', (e) => {
+    const li = e.target.closest('[role="option"]');
+    if (li) { e.preventDefault(); choose(+li.dataset.i); }
+  });
+  input.addEventListener('blur', () => setTimeout(closeList, 100));
+  input.addEventListener('focus', () => { if (items.length && input.value.trim().length >= 2) renderList(); });
+
+  function choose(i) {
+    const p = items[i];
+    if (!p) return;
+    closeList();
+    input.value = p.fullName;
+    location.hash = `player=${p.id}`;
+  }
+
+  // ---------- Player ----------
+  let playerCtrl, current = null, group = 'hitting', sort = { key: 'season', asc: true };
+
+  window.addEventListener('hashchange', route);
+  route();
+
+  function route() {
+    const id = (location.hash.match(/player=(\d+)/) || [])[1];
+    if (id) loadPlayer(id);
+  }
+
+  async function loadPlayer(id) {
+    playerCtrl?.abort();
+    playerCtrl = new AbortController();
+    setStatus('Loading…');
+    playerEl.hidden = true;
+    const hydrate = 'currentTeam,stats(group=[hitting,pitching],type=[yearByYear,career],sportId=1)';
+    try {
+      const d = await getJSON(`${API}/people/${id}?hydrate=${encodeURIComponent(hydrate)}`, playerCtrl.signal);
+      const p = d.people?.[0];
+      if (!p) throw new Error('Player not found.');
+      current = { person: p, stats: parseStats(p.stats || []) };
+      const hasHit = current.stats.hitting.rows.length, hasPitch = current.stats.pitching.rows.length;
+      // Pitchers default to the pitching tab; two-way players and hitters default to hitting.
+      group = p.primaryPosition?.abbreviation === 'P' && hasPitch ? 'pitching' : hasHit ? 'hitting' : 'pitching';
+      sort = { key: 'season', asc: true };
+      document.title = `${p.fullName} · MLB Player Stats`;
+      if (!input.value) input.value = p.fullName;
+      setStatus('');
+      renderPlayer();
+    } catch (e) {
+      if (e.name !== 'AbortError') setStatus(e.message || 'Could not load player.', true);
+    }
+  }
+
+  function parseStats(stats) {
+    const out = { hitting: { rows: [], career: null }, pitching: { rows: [], career: null } };
+    for (const s of stats) {
+      const g = s.group?.displayName, type = s.type?.displayName;
+      if (!out[g]) continue;
+      const splits = (s.splits || []).filter((sp) => !sp.sport || sp.sport.id === 1);
+      if (type === 'career') out[g].career = splits[0]?.stat || null;
+      if (type === 'yearByYear') {
+        out[g].rows = splits.map((sp) => ({
+          season: sp.season,
+          team: sp.team ? (sp.team.abbreviation || teamsById[sp.team.id]?.abbreviation || sp.team.name) : `${sp.numTeams || 2} Teams`,
+          isTotal: !sp.team,
+          stat: sp.stat || {},
+        }));
+      }
+    }
+    return out;
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function renderPlayer() {
+    const { person: p, stats } = current;
+    const team = p.currentTeam?.name || teamsById[p.currentTeam?.id]?.name;
+    const birthplace = [p.birthCity, p.birthStateProvince, p.birthCountry].filter(Boolean).join(', ');
+    const facts = [
+      ['Bats/Throws', p.batSide && p.pitchHand ? `${p.batSide.code}/${p.pitchHand.code}` : ''],
+      ['Height', p.height], ['Weight', p.weight ? `${p.weight} lb` : ''],
+      ['Born', p.birthDate ? `${fmtDate(p.birthDate)}${p.currentAge && !p.deathDate ? ` (age ${p.currentAge})` : ''}` : ''],
+      ['From', birthplace], ['Debut', fmtDate(p.mlbDebutDate)],
+      ['Last game', !p.active ? fmtDate(p.lastPlayedDate) : ''],
+    ].filter(([, v]) => v);
+
+    const groups = ['hitting', 'pitching'].filter((g) => stats[g].rows.length || stats[g].career);
+    const sub = [p.primaryPosition?.name, p.primaryNumber ? `#${p.primaryNumber}` : '', p.active ? team : 'Retired'].filter(Boolean).join(' · ');
+
+    playerEl.innerHTML = `
+      <div class="bio">
+        <img src="${headshot(p.id, 240)}" alt="${esc(p.fullName)}">
+        <div>
+          <h2>${esc(p.fullName)}${p.nickName ? `<span class="badge">${esc(p.nickName)}</span>` : ''}</h2>
+          <div class="sub">${esc(sub)}</div>
+          <dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+        </div>
+      </div>
+      ${groups.length > 1 ? `<div class="tabs" role="tablist">${groups.map((g) =>
+        `<button role="tab" data-g="${g}" aria-selected="${g === group}">${g[0].toUpperCase() + g.slice(1)}</button>`).join('')}</div>` : '<div style="height:24px"></div>'}
+      <div id="groupView"></div>`;
+    playerEl.hidden = false;
+
+    playerEl.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
+      group = b.dataset.g;
+      sort = { key: 'season', asc: true };
+      playerEl.querySelectorAll('.tabs button').forEach((x) => x.setAttribute('aria-selected', x === b));
+      renderGroup();
+    }));
+
+    if (!groups.length) {
+      $('groupView').innerHTML = '<p class="status">No MLB stats recorded for this player.</p>';
+      return;
+    }
+    renderGroup();
+  }
+
+  function renderGroup() {
+    const { rows, career } = current.stats[group];
+    const cols = COLUMNS[group];
+    const latest = rows.filter((r) => r.isTotal || !rows.some((o) => o.season === r.season && o.isTotal)).at(-1);
+
+    const tile = (stat) => TILES[group].map(([k, label]) =>
+      `<div class="tile"><div class="label">${label}</div><div class="value">${esc(stat?.[k] ?? '—')}</div></div>`).join('');
+
+    const sorted = [...rows];
+    if (!(sort.key === 'season' && sort.asc)) {
+      const val = (r) => sort.key === 'season' ? +r.season : sort.key === 'team' ? r.team : parseFloat(r.stat[sort.key]);
+      sorted.sort((a, b) => {
+        const x = val(a), y = val(b);
+        const cmp = typeof x === 'string' ? x.localeCompare(y) : (isNaN(x) ? -Infinity : x) - (isNaN(y) ? -Infinity : y);
+        return sort.asc ? cmp : -cmp;
+      });
+    }
+
+    const headCells = [['season', 'Year'], ['team', 'Team'], ...cols].map(([k, label]) =>
+      `<th data-k="${k}" class="${sort.key === k ? `sorted${sort.asc ? ' asc' : ''}` : ''}">${label}</th>`).join('');
+    const body = sorted.map((r) => {
+      // A traded player has one row per team plus a combined row; dim the per-team rows.
+      const split = !r.isTotal && rows.some((o) => o.season === r.season && o.isTotal);
+      return `<tr class="${split ? 'subtotal' : ''}"><td>${esc(r.season)}</td><td>${esc(r.team)}</td>${
+        cols.map(([k]) => `<td>${esc(r.stat[k] ?? '—')}</td>`).join('')}</tr>`;
+    }).join('');
+    const foot = career ? `<tfoot><tr><td>Career</td><td></td>${cols.map(([k]) => `<td>${esc(career[k] ?? '—')}</td>`).join('')}</tr></tfoot>` : '';
+
+    $('groupView').innerHTML = `
+      ${latest ? `<h3 class="section-title">${esc(latest.season)} season</h3><div class="tiles">${tile(latest.stat)}</div>` : ''}
+      ${career ? `<h3 class="section-title">Career</h3><div class="tiles">${tile(career)}</div>` : ''}
+      <h3 class="section-title">Year by year</h3>
+      <div class="table-wrap"><table>
+        <thead><tr>${headCells}</tr></thead>
+        <tbody>${body}</tbody>${foot}
+      </table></div>`;
+
+    $('groupView').querySelectorAll('thead th').forEach((th) => th.addEventListener('click', () => {
+      const k = th.dataset.k;
+      sort = sort.key === k ? { key: k, asc: !sort.asc } : { key: k, asc: k === 'season' || k === 'team' };
+      renderGroup();
+    }));
+  }
+
+  function setStatus(msg, isError = false) {
+    statusEl.textContent = msg;
+    statusEl.classList.toggle('error', isError);
+  }
+})();
+</script>
+</body>
+</html>
